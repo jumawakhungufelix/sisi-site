@@ -23,367 +23,380 @@ class Citizen {
     }
 }
 
+
+
 class Project {
-    static nextId = 1;
-    
-    // Encapsulated collections to track records per project instance
-    #votes = new Map();         // Maps citizen ID -> 'support' or 'oppose'
-    #feedbackList = [];        // Stores feedback objects { citizenId, text }
+  // Static variable to give every project a unique number ID (1, 2, 3...)
+  static nextId = 1;
 
-    constructor(title, budget) {
-        this.id = Project.nextId++;
-        this.title = title;
-        this.budget = budget; // Budget in KSh
+  // Rule: A getter that returns "National" without using brackets ()
+  get level() {
+    return "National";
+  }
+
+  constructor(title, budget) {
+    this.id = Project.nextId;
+    Project.nextId++; // Increment so the next project gets the next number
+
+    this.title = title;
+    this.budget = budget;
+
+    // Arrays to store our data
+    this.votedCitizenIds = []; // Keeps track of who has already voted
+    this.voteChoices = [];     // Keeps track of the actual choices ("support" or "oppose")
+    this.feedbackList = [];    // Keeps track of written feedback
+  }
+
+  // METHOD: Say whether a given citizen has already voted (Returns true or false)
+  hasVoted(citizen) {
+    // Check if the citizen's ID exists inside our voted list array
+    return this.votedCitizenIds.includes(citizen.id_no);
+  }
+
+  // METHOD: Accept a vote from a citizen
+  acceptVote(citizen, choice) {
+    // Rule: Any choice other than support or oppose is refused
+    if (choice !== "support" && choice !== "oppose") {
+      console.log(`Vote refused for ${citizen.name}: Choice must be 'support' or 'oppose'.`);
+      return; // Stop running the function right here
     }
 
-    // Rule 1 & 2: Accept a vote from a citizen. One vote per citizen. Refuse invalid choices.
-    acceptVote(citizen, choice) {
-        if (!choice || typeof choice !== 'string') return false;
-        
-        const normalizedChoice = choice.trim().toLowerCase();
-        
-        // Ensure choice is strictly support or oppose
-        if (normalizedChoice !== 'support' && normalizedChoice !== 'oppose') {
-            console.log(`Vote rejected: '${choice}' is an invalid choice.`);
-            return false;
-        }
-
-        // Prevent duplicate voting per citizen
-        if (this.#votes.has(citizen.id_no)) {
-            console.log(`Vote rejected: Citizen ID ${citizen.id_no} has already voted.`);
-            return false;
-        }
-
-        this.#votes.set(citizen.id_no, normalizedChoice);
-        return true;
+    // Rule: One vote per citizen. A second vote is refused.
+    if (this.hasVoted(citizen)) {
+      console.log(`Vote refused: ${citizen.name} has already voted on this project.`);
+      return; // Stop running the function
     }
 
-    // Rule 3: Say whether a given citizen has voted (returns true or false)
-    hasVoted(citizen) {
-        return this.#votes.has(citizen.id_no);
+    // If they pass the rules, record their vote!
+    this.votedCitizenIds.push(citizen.id_no); // Remember their ID so they can't vote again
+    this.voteChoices.push(choice);             // Remember what they voted for
+    console.log(`Vote successfully recorded for ${citizen.name}!`);
+  }
+
+  // METHOD: Accept feedback from a citizen
+  acceptFeedback(citizen, message) {
+    // Rule: Empty or blank feedback is refused
+    if (message === "" || message.trim() === "") {
+      console.log(`Feedback refused from ${citizen.name}: Message cannot be empty.`);
+      return;
     }
 
-    // Rule 4: Accept feedback from a citizen. Empty/blank is refused. Remember author.
-    acceptFeedback(citizen, feedbackText) {
-        if (!feedbackText || !feedbackText.trim()) {
-            console.log("Feedback rejected: Message cannot be empty or blank.");
-            return false;
-        }
+    // Each entry remembers who wrote it
+    let feedbackEntry = {
+      authorId: citizen.id_no,
+      authorName: citizen.name,
+      text: message
+    };
 
-        this.#feedbackList.push({
-            citizenId: citizen.id_no,
-            text: feedbackText.trim()
-        });
-        return true;
+    this.feedbackList.push(feedbackEntry);
+    console.log(`Feedback added from ${citizen.name}!`);
+  }
+
+  // METHOD: Report the total results
+  reportResults() {
+    let supportCount = 0;
+    let opposeCount = 0;
+
+    // Loop through our array of choices to count them up
+    for (let i = 0; i < this.voteChoices.length; i++) {
+      if (this.voteChoices[i] === "support") {
+        supportCount++;
+      } else if (this.voteChoices[i] === "oppose") {
+        opposeCount++;
+      }
     }
 
-    // Rule 5: Report support count, oppose count, and percentage
-    reportResults() {
-        let supportCount = 0;
-        let opposeCount = 0;
+    let totalVotes = supportCount + opposeCount;
+    let supportPercentage = "0%";
 
-        for (const choice of this.#votes.values()) {
-            if (choice === 'support') supportCount++;
-            if (choice === 'oppose') opposeCount++;
-        }
-
-        const totalVotes = supportCount + opposeCount;
-        const supportPercentage = totalVotes > 0 
-            ? ((supportCount / totalVotes) * 100).toFixed(1) + '%' 
-            : '0%';
-
-        return {
-            supportCount,
-            opposeCount,
-            supportPercentage
-        };
+    // Rule: Calculate percentage only if there are votes, otherwise keep it 0%
+    if (totalVotes > 0) {
+      let calculation = (supportCount / totalVotes) * 100;
+      supportPercentage = calculation + "%";
     }
 
-    // Rule 6: Getter that reads like a property and returns "National"
-    get level() {
-        return "National";
-    }
+    // Return the final numbers together as an object
+    return {
+      support: supportCount,
+      oppose: opposeCount,
+      percentage: supportPercentage
+    };
+  }
 }
 
 class CountyProject extends Project {
-    // Encapsulated private field for the county
-    #county;
+  // Rule: Override the getter to read the dynamic county name instead of "National"
+  get level() {
+    return `${this.county} County`;
+  }
 
-    constructor(title, budget, county) {
-        // Reuse Part B validation: verify if the county is supported by the Citizen class
-        if (!Citizen.supportedCounties(county)) {
-            throw new Error(`County ${county} is not a supported county.`);
-        }
-        
-        // Call the parent Project constructor using super
-        super(title, budget);
-        this.#county = county;
+  constructor(title, budget, county) {
+    // Check if the county is supported by reusing Part B's Citizen.supportedCounties static method
+    if (!Citizen.supportedCounties(county)) {
+      throw new Error(`County ${county} is not supported!`);
     }
 
-    /**
-     * Overrides the level getter. 
-     * Reads like a property and returns "[County Name] County".
-     */
-    get level() {
-        return `${this.#county} County`;
+    // super() calls the constructor of the parent Project class
+    super(title, budget); 
+
+    // Save the new, extra piece of information unique to a County Project
+    this.county = county; 
+  }
+
+  // Rule: Override the acceptVote method to enforce the county rule first
+  acceptVote(citizen, choice) {
+    // New rule: Check if the citizen's county matches this project's county
+    if (citizen.county !== this.county) {
+      console.log(`Vote refused for ${citizen.name}: Only residents of ${this.county} County can vote.`);
+      return; // Stop the function immediately
     }
 
-    /**
-     * Overrides the acceptVote method to enforce the new regional restriction.
-     * Reuses the parent's logic for single voting via super.
-     */
-    acceptVote(citizen, choice) {
-        // New Rule: Only citizens registered in this project's county may vote
-        if (citizen.county !== this.#county) {
-            console.log(`Vote rejected: ${citizen.name} belongs to ${citizen.county}, but this project is for ${this.#county} County.`);
-            return false;
-        }
-
-        // Reuse the parent's one-vote and valid choice rules using super
-        return super.acceptVote(citizen, choice);
-    }
+    // Reuse the parent's voting rules (one-vote check & choice validation) without rewriting it
+    super.acceptVote(citizen, choice);
+  }
 }
-
-// ==================== TEST DRIVER EXECUTIONS ====================
-
-// 1. Register citizens
-const C1 = new Citizen('Wanjiku', 'Nairobi');
-const C2 = new Citizen('Felix', 'Nairobi');
-C1.describe();
-C2.describe();
-console.log(`Total registered citizens: ${Citizen.registeredCitizens}\n`);
-
-// 2. Create a National Project
-const expressway = new Project('Nairobi Expressway Phase 2', 5000000);
-console.log(`Project Created: ID ${expressway.id} - ${expressway.title} (Level: ${expressway.level})`);
-
-// 3. Test Voting Rules
-expressway.acceptVote(C1, 'support'); // Valid vote
-expressway.acceptVote(C1, 'oppose');  // Duplicate vote (Refused)
-expressway.acceptVote(C2, 'maybe');   // Invalid choice (Refused)
-expressway.acceptVote(C2, 'oppose');  // Valid vote
-
-// 4. Test Verification Rule
-console.log(`Has Wanjiku voted? ${expressway.hasVoted(C1)}`); 
-
-// 5. Test Feedback Rules
-expressway.acceptFeedback(C1, 'This will ease traffic immensely!'); // Valid feedback
-expressway.acceptFeedback(C2, '   '); // Blank feedback (Refused)
-
-// 6. Report Results
-console.log("\n--- Final Project Results ---");
-console.log(expressway.reportResults());
-
-//Section D
-// 1. Setup Citizens from different counties
-const nairobiCitizen = new Citizen('Amina', 'Nairobi');
-const kisumuCitizen = new Citizen('Ochieng', 'Kisumu');
-
-// 2. Instantiate a County Project (Threw error if county was invalid like 'Nakuru')
-const stadiumProject = new CountyProject('Kisumu Stadium Renovation', 2500000, 'Kisumu');
-console.log(`Project Created: ID ${stadiumProject.id} - ${stadiumProject.title}`);
-console.log(`Project Level: ${stadiumProject.level}\n`); // Reads without brackets
-
-// 3. Test Regional Voting Rule (Amina from Nairobi tries to vote on a Kisumu project)
-stadiumProject.acceptVote(nairobiCitizen, 'support'); 
-
-// 4. Test Valid Regional Voting (Ochieng from Kisumu votes)
-stadiumProject.acceptVote(kisumuCitizen, 'support');
-
-// 5. Test Parent Rule Re-use (Ochieng tries to vote a second time)
-stadiumProject.acceptVote(kisumuCitizen, 'oppose'); 
-
-// 6. Report Results
-console.log("\n--- County Project Results ---");
-console.log(stadiumProject.reportResults());
-
 
 class Portal {
-    // Encapsulated collections using maps and arrays
-    #citizens = new Map();     // Maps citizen ID -> Citizen object
-    #projects = new Map();     // Maps project ID -> Project/CountyProject object
-    #loggedInCitizen = null;   // Keeps track of the active user session
+  constructor() {
+    this.citizens = [];      // Array to store all registered Citizen objects
+    this.projects = [];      // Array to store all Project and CountyProject objects
+    this.currentUser = null; // Remembers who is currently logged in (Citizen object or null)
+  }
 
-    /**
-     * Registers a new citizen through the portal, creates the object, and saves it.
-     */
-    registerCitizen(name, county) {
-        try {
-            const newCitizen = new Citizen(name, county);
-            this.#citizens.set(newCitizen.id_no, newCitizen);
-            return newCitizen;
-        } catch (error) {
-            console.log(`Registration Failed: ${error.message}`);
-            return null;
+  // METHOD: Register a citizen (the portal creates the Citizen object)
+  registerCitizen(name, county) {
+    try {
+      const newCitizen = new Citizen(name, county);
+      this.citizens.push(newCitizen);
+      console.log(`Citizen ${name} successfully registered with ID ${newCitizen.id_no}!`);
+      return newCitizen;
+    } catch (error) {
+      console.log(`Registration failed: ${error.message}`);
+      return null;
+    }
+  }
+
+  // METHOD: Remember who is currently logged in
+  login(citizenId) {
+    for (let i = 0; i < this.citizens.length; i++) {
+      if (this.citizens[i].id_no === citizenId) {
+        this.currentUser = this.citizens[i];
+        console.log(`Successfully logged in as: ${this.currentUser.name} (${this.currentUser.county} County)`);
+        return;
+      }
+    }
+    console.log(`Login failed: No citizen found with ID ${citizenId}.`);
+  }
+
+  // METHOD: Logout utility
+  logout() {
+    this.currentUser = null;
+    console.log("Logged out successfully.");
+  }
+
+  // METHOD: Add projects of either kind
+  addProject(projectObject) {
+    this.projects.push(projectObject);
+    console.log(`Added Project: [ID ${projectObject.id}] "${projectObject.title}"`);
+  }
+
+  // METHOD: Find a project by its id
+  findProjectById(projectId) {
+    for (let i = 0; i < this.projects.length; i++) {
+      if (this.projects[i].id === projectId) {
+        return this.projects[i];
+      }
+    }
+    return null; // Not found
+  }
+
+  // METHOD: List projects three ways
+  listProjects(type) {
+    const list = [];
+
+    for (let i = 0; i < this.projects.length; i++) {
+      const proj = this.projects[i];
+
+      if (type === "all") {
+        list.push(proj);
+      } 
+      else if (type === "national" && proj.level === "National") {
+        list.push(proj);
+      } 
+      else if (type === "my county") {
+        // If nobody is logged in, return an empty list
+        if (!this.currentUser) {
+          continue; 
         }
+        // Match only county projects that belong to the logged-in citizen's county
+        if (proj.level !== "National" && proj.county === this.currentUser.county) {
+          list.push(proj);
+        }
+      }
+    }
+    return list;
+  }
+
+  // METHOD: Vote as the logged-in citizen, by project id
+  voteOnProject(projectId, choice) {
+    // Rule: Voting when nobody is logged in is refused
+    if (!this.currentUser) {
+      console.log("Vote refused: You must be logged in to vote!");
+      return;
     }
 
-    /**
-     * Simulates logging in a citizen using their registration ID number.
-     */
-    login(citizenId) {
-        if (this.#citizens.has(citizenId)) {
-            this.#loggedInCitizen = this.#citizens.get(citizenId);
-            console.log(`Session Active: ${this.#loggedInCitizen.name} logged in.`);
-            return true;
-        }
-        console.log(`Login Failed: Citizen ID ${citizenId} not found.`);
-        return false;
+    const project = this.findProjectById(projectId);
+    if (!project) {
+      console.log(`Vote refused: Project ID ${projectId} does not exist.`);
+      return;
     }
 
-    /**
-     * Logs out the current user session.
-     */
-    logout() {
-        this.#loggedInCitizen = null;
-        console.log("Logged out successfully.");
+    // Call the project's own method using the logged-in user object
+    project.acceptVote(this.currentUser, choice);
+  }
+
+  // METHOD: Give feedback as the logged-in citizen, by project id
+  submitFeedback(projectId, message) {
+    if (!this.currentUser) {
+      console.log("Feedback refused: You must be logged in to submit feedback!");
+      return;
     }
 
-    /**
-     * Adds an existing Project or CountyProject instance to the system.
-     */
-    addProject(project) {
-        this.#projects.set(project.id, project);
+    const project = this.findProjectById(projectId);
+    if (!project) {
+      console.log(`Feedback refused: Project ID ${projectId} does not exist.`);
+      return;
     }
 
-    /**
-     * Finds and returns a project by its unique numeric ID.
-     */
-    findProjectById(projectId) {
-        return this.#projects.get(projectId) || null;
+    project.acceptFeedback(this.currentUser, message);
+  }
+
+  // METHOD: Report the project with the highest support percentage
+  reportHighestSupported() {
+    if (this.projects.length === 0) return null;
+
+    let bestProject = null;
+    let highestPct = -1; // Start below 0% so any valid calculation beats it
+
+    for (let i = 0; i < this.projects.length; i++) {
+      const proj = this.projects[i];
+      const results = proj.reportResults(); // Object containing { support, oppose, percentage }
+      
+      // Convert "66.7%" string into a float number like 66.7
+      const currentPct = parseFloat(results.percentage); 
+
+      if (currentPct > highestPct) {
+        highestPct = currentPct;
+        bestProject = proj;
+      }
     }
 
-    /**
-     * Lists projects matching dynamic filters.
-     * Mode options: 'all', 'national', 'my_county'
-     */
-    listProjects(mode = 'all') {
-        const allProjects = Array.from(this.#projects.values());
-
-        if (mode === 'national') {
-            return allProjects.filter(p => p.level === "National");
-        }
-
-        if (mode === 'my_county') {
-            if (!this.#loggedInCitizen) {
-                return []; // Rule: Empty list if nobody is logged in
-            }
-            // Checks if project is a CountyProject (level will include "County")
-            // and compares it directly with the logged-in user's regional criteria
-            return allProjects.filter(p => p.level === `${this.#loggedInCitizen.county} County`);
-        }
-
-        return allProjects; // Default: 'all'
-    }
-
-    /**
-     * Casts a vote for a project on behalf of the logged-in citizen.
-     */
-    voteOnProject(projectId, choice) {
-        // Rule: Voting when nobody is logged in is refused.
-        if (!this.#loggedInCitizen) {
-            console.log("Action Refused: You must be logged in to vote.");
-            return false;
-        }
-
-        const project = this.findProjectById(projectId);
-        if (!project) {
-            console.log(`Action Refused: Project ID ${projectId} does not exist.`);
-            return false;
-        }
-
-        return project.acceptVote(this.#loggedInCitizen, choice);
-    }
-
-    /**
-     * Submits feedback for a project on behalf of the logged-in citizen.
-     */
-    submitFeedback(projectId, text) {
-        if (!this.#loggedInCitizen) {
-            console.log("Action Refused: You must be logged in to submit feedback.");
-            return false;
-        }
-
-        const project = this.findProjectById(projectId);
-        if (!project) {
-            console.log(`Action Refused: Project ID ${projectId} does not exist.`);
-            return false;
-        }
-
-        return project.acceptFeedback(this.#loggedInCitizen, text);
-    }
-
-    /**
-     * Analyzes and reports the project with the highest support percentage.
-     */
-    reportHighestSupported() {
-        if (this.#projects.size === 0) return null;
-
-        let highestProject = null;
-        let highestPercentage = -1;
-
-        for (const project of this.#projects.values()) {
-            const results = project.reportResults();
-            // Parse numerical float from string value format (e.g. "85.5%" -> 85.5)
-            const percentage = parseFloat(results.supportPercentage);
-
-            if (percentage > highestPercentage) {
-                highestPercentage = percentage;
-                highestProject = project;
-            }
-        }
-
-        return highestProject;
-    }
+    return bestProject;
+  }
 }
 
-// ==================== SEED DATA & TEST EXECUTION ====================
 
-// 1. Initialize the Portal
+
+// Test cases and Run
+// 1.1 Create the citizens using your Citizen class
+const C1 = new Citizen('Wanjiku', 'Nairobi');
+const C2 = new Citizen('Felix', 'Nairobi');
+const C3 = new Citizen('Mwangi', 'Kiambu');
+
+// 1.2. Create a National Project
+const expressway = new Project("Nairobi Expressway", "KSh 50B");
+
+console.log(`Project Level: ${expressway.level}`); // Prints: National
+
+// 1.3. Testing Votes
+expressway.acceptVote(C1, "support"); // Success!
+expressway.acceptVote(C2, "oppose");  // Success!
+
+// Rule Test: Trying to vote a second time
+expressway.acceptVote(C1, "oppose");  // Refused! Wanjiku already voted.
+
+// Rule Test: Invalid choice
+expressway.acceptVote(C3, "maybe");   // Refused! Must be support or oppose.
+
+// 1.4. Testing Feedback
+expressway.acceptFeedback(C1, "Saves a lot of travel time."); // Success!
+expressway.acceptFeedback(C2, "   ");                        // Refused! Empty string.
+
+// 1.5. Printing Final Results
+console.log("--- FINAL RESULTS ---");
+console.log(expressway.reportResults()); 
+// Output: { support: 1, oppose: 1, percentage: "50%" }
+
+
+
+
+
+// 2.1 Try creating a project in an unsupported county (Will crash as requested)
+try {
+  const badProject = new CountyProject("Mombasa Port Upgrade", "KSh 2B", "Nakuru");
+} catch (error) {
+  console.log(`Error Caught: ${error.message}`); // Output: County Nakuru is not supported!
+}
+
+// 2.2. Create a valid County Project for Nairobi
+const roadUpgrade = new CountyProject("Nairobi Ring Road Phase 1", "KSh 5B", "Nairobi");
+
+// Verify the Getter rule
+console.log(`Project Level: ${roadUpgrade.level}`); // Output: Nairobi County
+console.log(`Project ID: ${roadUpgrade.id}`);       // Output: 2 (Auto-incremented from Project class)
+
+console.log("\n--- Voting Phase ---");
+
+// Test Rule: Valid matching resident votes
+roadUpgrade.acceptVote(C1, "support"); // Output: Vote successfully recorded for Wanjiku!
+
+// Test Rule: Citizen from a DIFFERENT county tries to vote
+roadUpgrade.acceptVote(C3, "support"); // Output: Vote refused for Mwangi: Only residents of Nairobi County can vote.
+
+// Test Rule: Reusing the Parent's one-vote rule (Wanjiku tries to vote a second time)
+roadUpgrade.acceptVote(C1, "oppose");  // Output: Vote refused: Wanjiku has already voted on this project.
+
+console.log("\n--- Final Results ---");
+console.log(roadUpgrade.reportResults()); // Output: { support: 1, oppose: 0, percentage: "100%" }
+
+
+
+// ==================== INITIAL PORTAL SETUP ====================
 const sisiApp = new Portal();
 
-// 2. Load Fictional Test Data
-const p1 = new Project('Affordable Housing Phase 3', 5000000000);
-const p2 = new CountyProject('Market Upgrade', 120000000, 'Nairobi');
-const p3 = new CountyProject('Ferry Walkway', 80000000, 'Mombasa');
-const p4 = new CountyProject('Lakefront Street Lights', 45000000, 'Kisumu');
+// 1. Add your projects...
+sisiApp.addProject(new Project("Affordable Housing Phase 3", "KSh 5,000,000,000"));
+sisiApp.addProject(new CountyProject("Market Upgrade", "KSh 120,000,000", "Nairobi"));
+sisiApp.addProject(new CountyProject("Ferry Walkway", "KSh 80,000,000", "Mombasa"));
+sisiApp.addProject(new CountyProject("Lakefront Street Lights", "KSh 45,000,000", "Kisumu"));
 
-sisiApp.addProject(p1);
-sisiApp.addProject(p2);
-sisiApp.addProject(p3);
-sisiApp.addProject(p4);
+// 2. Register citizens and save their returned object references
+const wanjiku = sisiApp.registerCitizen("Wanjiku", "Nairobi"); 
+const ali = sisiApp.registerCitizen("Ali", "Mombasa");         
 
-// 3. Register Citizens across different regions
-const c1 = sisiApp.registerCitizen('Amina', 'Nairobi');
-const c2 = sisiApp.registerCitizen('Juma', 'Mombasa');
+console.log("\n--- TESTING LISTING & LOGIN CONTROLS ---");
 
-console.log("--- Initial Application State ---");
-console.log(`Total Projects Loaded: ${sisiApp.listProjects('all').length}`);
 
-// 4. Test filtering actions when logged out
-console.log(`'my county' project count when logged out: ${sisiApp.listProjects('my_county').length}`);
+sisiApp.login(wanjiku.id_no); 
 
-// 5. Test session handling and execution rules
-sisiApp.login(c1.id_no); // Amina from Nairobi logs in
 
-console.log("\n--- Filtering Projects for Amina (Nairobi) ---");
-console.log("My County Projects:", sisiApp.listProjects('my_county').map(p => p.title));
-console.log("National Projects:", sisiApp.listProjects('national').map(p => p.title));
+console.log("Wanjiku's county projects:", sisiApp.listProjects("my county").map(p => p.title));
 
-// 6. Test interaction engine rules
-sisiApp.voteOnProject(p1.id, 'support'); // Amina votes on National project (Success)
-sisiApp.voteOnProject(p2.id, 'support'); // Amina votes on Nairobi project (Success)
-sisiApp.voteOnProject(p3.id, 'support'); // Amina tries to vote on Mombasa project (Fails regional rule)
-sisiApp.submitFeedback(p1.id, 'Great step towards home ownership.');
+console.log("\n--- TESTING VOTING & FEEDBACK RULES ---");
 
-sisiApp.logout();
 
-// 7. Verify analytics metrics
-sisiApp.login(c2.id_no); // Juma from Mombasa logs in
-sisiApp.voteOnProject(p1.id, 'oppose'); // Juma opposes housing project (Ties percentage)
-sisiApp.voteOnProject(p3.id, 'support'); // Juma supports Mombasa walkway (100% support)
+sisiApp.voteOnProject(1, "support"); 
+sisiApp.voteOnProject(2, "support"); 
+sisiApp.submitFeedback(1, "Housing is a basic human right!");
 
-console.log("\n--- Global Analytics Performance ---");
-const starProject = sisiApp.reportHighestSupported();
-console.log(`Highest Supported Project: "${starProject.title}" with standard results:`, starProject.reportResults());
 
+sisiApp.login(ali.id_no); 
+
+sisiApp.voteOnProject(3, "support"); 
+sisiApp.voteOnProject(1, "oppose");  
+
+console.log("\n--- TESTING HIGHEST SUPPORT REPORT ---");
+const winner = sisiApp.reportHighestSupported();
+if (winner) {
+  console.log(`Highest supported project: "${winner.title}" with a rating of ${winner.reportResults().percentage}`);
+}
